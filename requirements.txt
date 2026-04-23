@@ -1,0 +1,4 @@
+Flask==3.0.3
+openai==1.30.5
+pypdf==4.2.0
+gunicorn==22.0.0
