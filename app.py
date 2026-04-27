@@ -36,16 +36,14 @@ def paciente_quer_recepcao(mensagem):
         "recepção","recepcao","atendente","humano","pessoa",
         "falar com alguém","falar com alguem",
         "quero falar com alguém","quero falar com alguem",
-        "quero falar com a recepção","quero falar com a recepcao",
-        "encaminhe","transferir","transferência","transferencia"
+        "encaminhe","transferir"
     ]
 
-    return any(termo in mensagem for termo in gatilhos)
+    return any(t in mensagem for t in gatilhos)
 
 
 def gerar_link_whatsapp(numero, mensagem):
-    mensagem_codificada = quote(mensagem)
-    return f"https://wa.me/{numero}?text={mensagem_codificada}"
+    return f"https://wa.me/{numero}?text={quote(mensagem)}"
 
 
 texto_pdf = carregar_texto_pdf(PDF_PATH)
@@ -62,33 +60,33 @@ def chat():
     mensagem = data.get("mensagem", "").strip()
 
     if not mensagem:
-        return jsonify({"resposta": "Você não digitou nenhuma mensagem.", "transferir": False})
+        return jsonify({"resposta": "Digite uma mensagem.", "transferir": False})
 
-    mensagem_whatsapp = f"Olá, vim do assistente virtual.\n\nMensagem do paciente: {mensagem}"
+    mensagem_whatsapp = f"Olá, vim do site.\n\nMensagem: {mensagem}"
 
     if paciente_quer_recepcao(mensagem):
         return jsonify({
-            "resposta": "Claro. Vou te encaminhar para a recepção.",
+            "resposta": "Vou te encaminhar para a recepção.",
             "transferir": True,
             "link_whatsapp": gerar_link_whatsapp(WHATSAPP_RECEPCAO, mensagem_whatsapp)
         })
 
     try:
         prompt = f"""
-Você é um assistente virtual da clínica Caviver.
+Você é um assistente da clínica Caviver.
 
-Use as informações abaixo para responder:
+Use o conteúdo abaixo para responder:
 
 {texto_pdf}
 
-Pergunta do paciente:
+Pergunta:
 {mensagem}
 """
 
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Seja claro, educado e objetivo."},
+                {"role": "system", "content": "Seja claro e educado."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -101,9 +99,8 @@ Pergunta do paciente:
         })
 
     except Exception as e:
-        print("ERRO:", e)
         return jsonify({
-            "resposta": f"Erro ao usar a IA: {str(e)}",
+            "resposta": f"Erro: {str(e)}",
             "transferir": False
         })
 
