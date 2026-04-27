@@ -1,12 +1,13 @@
 from flask import Flask, render_template, request, jsonify
-from openai import OpenAI
+import openai
+import os
 from pypdf import PdfReader
 from urllib.parse import quote
 import os
 
 app = Flask(__name__)
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 PDF_PATH = "Institucional_Caviver.pdf"
 WHATSAPP_RECEPCAO = "5585996046227"
@@ -123,9 +124,16 @@ def chat():
         })
 
     try:
-        response = client.responses.create(
-            model="gpt-4o-mini",
-            instructions="""
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Você é um assistente virtual da clínica Caviver. Seja claro, educado e objetivo."},
+                {"role": "user", "content": mensagem}
+            ]
+        )
+
+        resposta = response["choices"][0]["message"]["content"]
+
 Você é um assistente virtual da clínica Caviver.
 
 Regras:
