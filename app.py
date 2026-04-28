@@ -10,7 +10,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 PDF_PATH = "Institucional_Caviver.pdf"
 
-WHATSAPP_RECEPCAO = "5585982035619"
+WHATSAPP_ATENDENTE = "5585982035619"
 LINK_AGENDAMENTO_ONLINE = "https://visaosolidaria.agende.ai"
 
 
@@ -31,14 +31,15 @@ def carregar_texto_pdf(caminho_pdf):
         return ""
 
 
-def paciente_quer_recepcao(mensagem):
+def paciente_quer_atendente(mensagem):
     mensagem = mensagem.lower()
 
     gatilhos = [
         "recepção", "recepcao", "atendente", "humano", "pessoa",
         "falar com alguém", "falar com alguem",
         "quero falar com alguém", "quero falar com alguem",
-        "encaminhe", "transferir"
+        "falar com atendente", "quero atendente",
+        "encaminhe", "transferir", "tirar dúvidas", "tirar duvidas"
     ]
 
     return any(t in mensagem for t in gatilhos)
@@ -51,7 +52,21 @@ def paciente_quer_agendamento(mensagem):
         "agendamento", "agendar", "marcar", "consulta",
         "marcar consulta", "agendar consulta",
         "quero marcar", "quero agendar",
-        "como faço para agendar", "como agendar"
+        "como faço para agendar", "como agendar",
+        "exame", "atendimento", "oftalmo", "oftalmologista"
+    ]
+
+    return any(t in mensagem for t in gatilhos)
+
+
+def paciente_tem_urgencia(mensagem):
+    mensagem = mensagem.lower()
+
+    gatilhos = [
+        "perdi a visão", "perdi a visao", "perda de visão", "perda de visao",
+        "dor forte", "dor intensa", "trauma", "bati o olho",
+        "sangrando", "não estou enxergando", "nao estou enxergando",
+        "urgência", "urgencia", "emergência", "emergencia"
     ]
 
     return any(t in mensagem for t in gatilhos)
@@ -77,57 +92,88 @@ def chat():
     if not mensagem:
         return jsonify({"resposta": "Digite uma mensagem.", "transferir": False})
 
-    mensagem_whatsapp = f"Olá, gostaria de tirar dúvidas sobre o Caviver.\n\nMensagem: {mensagem}"
-    link_recepcao = gerar_link_whatsapp(WHATSAPP_RECEPCAO, mensagem_whatsapp)
+    mensagem_whatsapp = f"Olá, gostaria de tirar dúvidas sobre o Visão Solidária.\n\nMensagem: {mensagem}"
+    link_atendente = gerar_link_whatsapp(WHATSAPP_ATENDENTE, mensagem_whatsapp)
+
+    if paciente_tem_urgencia(mensagem):
+        resposta_urgencia = f"""Sinto muito por isso. Em casos de dor forte, perda súbita de visão, trauma no olho ou piora rápida, procure atendimento médico imediatamente.
+
+Se quiser tirar dúvidas sobre o Visão Solidária, você também pode falar com uma atendente:
+{link_atendente}"""
+
+        return jsonify({
+            "resposta": resposta_urgencia,
+            "transferir": True,
+            "link_whatsapp": link_atendente
+        })
 
     if paciente_quer_agendamento(mensagem):
-        resposta_agendamento = f"""Você prefere falar com uma atendente ou realizar o agendamento online?
+        resposta_agendamento = f"""Você prefere fazer o agendamento online ou falar com uma atendente?
 
 👉 Agendamento online:
 {LINK_AGENDAMENTO_ONLINE}
 
 👉 Falar com atendente:
-{link_recepcao}"""
+{link_atendente}"""
 
         return jsonify({
             "resposta": resposta_agendamento,
             "transferir": False,
-            "link_whatsapp": link_recepcao
+            "link_whatsapp": link_atendente
         })
 
-    if paciente_quer_recepcao(mensagem):
+    if paciente_quer_atendente(mensagem):
         return jsonify({
-            "resposta": f"Claro. Você pode falar com uma atendente pelo link abaixo:\n\n{link_recepcao}",
+            "resposta": f"Claro. Você pode falar com uma atendente pelo link abaixo:\n\n{link_atendente}",
             "transferir": True,
-            "link_whatsapp": link_recepcao
+            "link_whatsapp": link_atendente
         })
 
     try:
         prompt = f"""
-Você é um assistente virtual da clínica Caviver.
+Você é o assistente virtual do Visão Solidária.
+
+O Visão Solidária é um programa que oferece atendimentos oftalmológicos com valores mais acessíveis.
+
+Seu objetivo:
+- Tirar dúvidas dos pacientes.
+- Explicar o que é o Visão Solidária.
+- Orientar sobre consultas, exames e atendimento oftalmológico.
+- Incentivar o agendamento online quando o paciente demonstrar interesse.
+- Encaminhar para uma atendente quando necessário.
+
+Tom de voz:
+- Educado.
+- Acolhedor.
+- Simples.
+- Profissional.
+- Humano.
+- Nunca frio ou robótico.
 
 Regras importantes:
-1. Responda sempre de forma educada, clara, objetiva e profissional.
+1. Responda sempre de forma curta, clara e objetiva.
 2. Use as informações da base de conhecimento abaixo.
-3. Não invente informações.
-4. Se não souber responder, oriente a pessoa a falar com a recepção.
-5. Sempre que o usuário perguntar sobre agendamento, marcar consulta ou consulta, responda obrigatoriamente perguntando se ele prefere falar com uma atendente ou realizar o agendamento online.
+3. Não invente valores, horários, endereços ou serviços.
+4. Se não souber responder, diga que uma atendente pode ajudar.
+5. Nunca dê diagnóstico médico.
+6. Se o paciente relatar dor forte, perda súbita de visão, trauma no olho ou urgência, oriente procurar atendimento médico imediatamente.
+7. Sempre que o paciente perguntar sobre agendamento, consulta, exame, atendimento ou marcar consulta, responda obrigatoriamente perguntando se ele prefere fazer o agendamento online ou falar com uma atendente.
 
 Regra obrigatória de agendamento:
-Se a pergunta envolver agendamento, consulta ou marcar consulta, responda exatamente com as opções:
+Se a pergunta envolver agendamento, consulta, exame, atendimento ou marcar consulta, responda com estas opções:
 
-Você prefere falar com uma atendente ou realizar o agendamento online?
+Você prefere fazer o agendamento online ou falar com uma atendente?
 
 👉 Agendamento online:
 {LINK_AGENDAMENTO_ONLINE}
 
 👉 Falar com atendente:
-{link_recepcao}
+{link_atendente}
 
 Base de conhecimento:
 {texto_pdf}
 
-Pergunta do usuário:
+Pergunta do paciente:
 {mensagem}
 """
 
@@ -136,7 +182,7 @@ Pergunta do usuário:
             messages=[
                 {
                     "role": "system",
-                    "content": "Você é um assistente virtual da clínica Caviver. Seja claro, educado e não invente informações."
+                    "content": "Você é o assistente virtual do Visão Solidária. Seja educado, claro, objetivo e não invente informações."
                 },
                 {
                     "role": "user",
