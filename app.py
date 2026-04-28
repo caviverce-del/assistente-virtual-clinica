@@ -48,15 +48,24 @@ def paciente_quer_atendente(mensagem):
 def paciente_quer_agendamento(mensagem):
     mensagem = mensagem.lower()
 
-    gatilhos = [
-        "agendamento", "agendar", "marcar", "consulta",
-        "marcar consulta", "agendar consulta",
-        "quero marcar", "quero agendar",
-        "como faço para agendar", "como agendar",
-        "exame", "atendimento", "oftalmo", "oftalmologista"
+    gatilhos_fortes = [
+        "quero agendar",
+        "quero marcar",
+        "quero fazer agendamento",
+        "como faço para agendar",
+        "como faco para agendar",
+        "como agendar",
+        "agendar consulta",
+        "marcar consulta",
+        "fazer agendamento",
+        "link de agendamento",
+        "manda o link",
+        "mande o link",
+        "pode agendar",
+        "quero atendimento"
     ]
 
-    return any(t in mensagem for t in gatilhos)
+    return any(t in mensagem for t in gatilhos_fortes)
 
 
 def paciente_tem_urgencia(mensagem):
@@ -96,9 +105,9 @@ def chat():
     link_atendente = gerar_link_whatsapp(WHATSAPP_ATENDENTE, mensagem_whatsapp)
 
     if paciente_tem_urgencia(mensagem):
-        resposta_urgencia = f"""Sinto muito por isso. Em casos de dor forte, perda súbita de visão, trauma no olho ou piora rápida, procure atendimento médico imediatamente.
+        resposta_urgencia = f"""Sinto muito por isso. Em casos de dor forte, perda súbita de visão, trauma no olho ou piora rápida, o ideal é procurar atendimento médico imediatamente.
 
-Se quiser tirar dúvidas sobre o Visão Solidária, você também pode falar com uma atendente:
+Se quiser, também posso te direcionar para uma atendente do Visão Solidária:
 {link_atendente}"""
 
         return jsonify({
@@ -108,7 +117,9 @@ Se quiser tirar dúvidas sobre o Visão Solidária, você também pode falar com
         })
 
     if paciente_quer_agendamento(mensagem):
-        resposta_agendamento = f"""Você prefere fazer o agendamento online ou falar com uma atendente?
+        resposta_agendamento = f"""Claro 😊
+
+Você prefere fazer o agendamento online ou falar com uma atendente?
 
 👉 Agendamento online:
 {LINK_AGENDAMENTO_ONLINE}
@@ -124,7 +135,7 @@ Se quiser tirar dúvidas sobre o Visão Solidária, você também pode falar com
 
     if paciente_quer_atendente(mensagem):
         return jsonify({
-            "resposta": f"Claro. Você pode falar com uma atendente pelo link abaixo:\n\n{link_atendente}",
+            "resposta": f"Claro 😊 Você pode falar com uma atendente pelo link abaixo:\n\n{link_atendente}",
             "transferir": True,
             "link_whatsapp": link_atendente
         })
@@ -139,7 +150,8 @@ Seu objetivo:
 - Tirar dúvidas dos pacientes.
 - Explicar o que é o Visão Solidária.
 - Orientar sobre consultas, exames e atendimento oftalmológico.
-- Incentivar o agendamento online quando o paciente demonstrar interesse.
+- Conduzir o paciente com naturalidade, sem parecer robótico.
+- Sugerir agendamento somente quando fizer sentido.
 - Encaminhar para uma atendente quando necessário.
 
 Tom de voz:
@@ -148,19 +160,28 @@ Tom de voz:
 - Simples.
 - Profissional.
 - Humano.
+- Natural.
 - Nunca frio ou robótico.
 
 Regras importantes:
-1. Responda sempre de forma curta, clara e objetiva.
+1. Responda de forma curta, clara e natural.
 2. Use as informações da base de conhecimento abaixo.
 3. Não invente valores, horários, endereços ou serviços.
-4. Se não souber responder, diga que uma atendente pode ajudar.
+4. Se não souber responder, diga de forma gentil que uma atendente pode ajudar.
 5. Nunca dê diagnóstico médico.
 6. Se o paciente relatar dor forte, perda súbita de visão, trauma no olho ou urgência, oriente procurar atendimento médico imediatamente.
-7. Sempre que o paciente perguntar sobre agendamento, consulta, exame, atendimento ou marcar consulta, responda obrigatoriamente perguntando se ele prefere fazer o agendamento online ou falar com uma atendente.
+7. Não ofereça agendamento em toda resposta.
+8. Se o paciente apenas fizer uma pergunta, responda primeiro a pergunta.
+9. Se o paciente perguntar valor, explique que os valores são acessíveis e podem variar conforme o atendimento. Depois diga que, se quiser, você pode ajudar com o agendamento ou direcionar para uma atendente.
+10. Se o paciente demonstrar interesse claro em marcar, agendar ou receber o link, aí sim ofereça as opções de agendamento.
 
-Regra obrigatória de agendamento:
-Se a pergunta envolver agendamento, consulta, exame, atendimento ou marcar consulta, responda com estas opções:
+Regra para perguntas sobre valores:
+Se perguntarem sobre valor, preço ou quanto custa, responda de forma natural, sem forçar agendamento.
+Exemplo de resposta:
+"Os atendimentos do Visão Solidária têm valores mais acessíveis, mas o valor pode variar conforme o tipo de consulta ou exame. Se quiser, posso te ajudar a agendar ou te direcionar para uma atendente 😊"
+
+Regra para agendamento:
+Se o paciente disser claramente que quer agendar, marcar consulta ou pedir o link de agendamento, responda com estas opções:
 
 Você prefere fazer o agendamento online ou falar com uma atendente?
 
@@ -182,7 +203,7 @@ Pergunta do paciente:
             messages=[
                 {
                     "role": "system",
-                    "content": "Você é o assistente virtual do Visão Solidária. Seja educado, claro, objetivo e não invente informações."
+                    "content": "Você é o assistente virtual do Visão Solidária. Seja humano, educado, claro, objetivo e não invente informações."
                 },
                 {
                     "role": "user",
