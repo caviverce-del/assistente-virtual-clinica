@@ -9,7 +9,9 @@ app = Flask(__name__)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 PDF_PATH = "Institucional_Caviver.pdf"
-WHATSAPP_RECEPCAO = "5585996046227"
+
+WHATSAPP_RECEPCAO = "5585982035619"
+LINK_AGENDAMENTO_ONLINE = "https://visaosolidaria.agende.ai"
 
 
 def carregar_texto_pdf(caminho_pdf):
@@ -33,10 +35,23 @@ def paciente_quer_recepcao(mensagem):
     mensagem = mensagem.lower()
 
     gatilhos = [
-        "recepção","recepcao","atendente","humano","pessoa",
-        "falar com alguém","falar com alguem",
-        "quero falar com alguém","quero falar com alguem",
-        "encaminhe","transferir"
+        "recepção", "recepcao", "atendente", "humano", "pessoa",
+        "falar com alguém", "falar com alguem",
+        "quero falar com alguém", "quero falar com alguem",
+        "encaminhe", "transferir"
+    ]
+
+    return any(t in mensagem for t in gatilhos)
+
+
+def paciente_quer_agendamento(mensagem):
+    mensagem = mensagem.lower()
+
+    gatilhos = [
+        "agendamento", "agendar", "marcar", "consulta",
+        "marcar consulta", "agendar consulta",
+        "quero marcar", "quero agendar",
+        "como faço para agendar", "como agendar"
     ]
 
     return any(t in mensagem for t in gatilhos)
@@ -62,32 +77,71 @@ def chat():
     if not mensagem:
         return jsonify({"resposta": "Digite uma mensagem.", "transferir": False})
 
-    mensagem_whatsapp = f"Olá, vim do site.\n\nMensagem: {mensagem}"
+    mensagem_whatsapp = f"Olá, gostaria de tirar dúvidas sobre o Caviver.\n\nMensagem: {mensagem}"
+    link_recepcao = gerar_link_whatsapp(WHATSAPP_RECEPCAO, mensagem_whatsapp)
+
+    if paciente_quer_agendamento(mensagem):
+        resposta_agendamento = f"""Você prefere falar com uma atendente ou realizar o agendamento online?
+
+👉 Agendamento online:
+{LINK_AGENDAMENTO_ONLINE}
+
+👉 Falar com atendente:
+{link_recepcao}"""
+
+        return jsonify({
+            "resposta": resposta_agendamento,
+            "transferir": False,
+            "link_whatsapp": link_recepcao
+        })
 
     if paciente_quer_recepcao(mensagem):
         return jsonify({
-            "resposta": "Vou te encaminhar para a recepção.",
+            "resposta": f"Claro. Você pode falar com uma atendente pelo link abaixo:\n\n{link_recepcao}",
             "transferir": True,
-            "link_whatsapp": gerar_link_whatsapp(WHATSAPP_RECEPCAO, mensagem_whatsapp)
+            "link_whatsapp": link_recepcao
         })
 
     try:
         prompt = f"""
-Você é um assistente da clínica Caviver.
+Você é um assistente virtual da clínica Caviver.
 
-Use o conteúdo abaixo para responder:
+Regras importantes:
+1. Responda sempre de forma educada, clara, objetiva e profissional.
+2. Use as informações da base de conhecimento abaixo.
+3. Não invente informações.
+4. Se não souber responder, oriente a pessoa a falar com a recepção.
+5. Sempre que o usuário perguntar sobre agendamento, marcar consulta ou consulta, responda obrigatoriamente perguntando se ele prefere falar com uma atendente ou realizar o agendamento online.
 
+Regra obrigatória de agendamento:
+Se a pergunta envolver agendamento, consulta ou marcar consulta, responda exatamente com as opções:
+
+Você prefere falar com uma atendente ou realizar o agendamento online?
+
+👉 Agendamento online:
+{LINK_AGENDAMENTO_ONLINE}
+
+👉 Falar com atendente:
+{link_recepcao}
+
+Base de conhecimento:
 {texto_pdf}
 
-Pergunta:
+Pergunta do usuário:
 {mensagem}
 """
 
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Seja claro e educado."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "Você é um assistente virtual da clínica Caviver. Seja claro, educado e não invente informações."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
             ]
         )
 
