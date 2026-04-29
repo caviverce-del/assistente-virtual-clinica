@@ -354,9 +354,9 @@ Mensagem do paciente:
             return jsonify({
                 "resposta": """O valor da consulta do Visão Solidária fica R$150,00 
 
-                                O valor dos exames podem variar conforme tipo de exame.
+                            O valor dos exames podem variar conforme tipo de exame.
 
-                                Você deseja agendar online ou falar com uma atendente?""",
+                            Você deseja agendar online ou falar com uma atendente?""",
                                         "transferir": False
             })
 
