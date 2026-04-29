@@ -2,11 +2,11 @@ from flask import Flask, render_template, request, jsonify
 import os
 from pypdf import PdfReader
 from urllib.parse import quote
-from openai import OpenAI
+import openai
 
 app = Flask(__name__)
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 PDF_PATH = "Institucional_Caviver.pdf"
 
@@ -235,8 +235,8 @@ Mensagem do paciente:
 {mensagem}
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
         messages=[
             {
                 "role": "system",
@@ -250,7 +250,7 @@ Mensagem do paciente:
         temperature=0.5
     )
 
-    return response.choices[0].message.content.strip()
+    return response["choices"][0]["message"]["content"].strip()
 
 
 @app.route("/")
