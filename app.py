@@ -1,17 +1,20 @@
 from flask import Flask, render_template, request, jsonify
-import openai
 import os
 from pypdf import PdfReader
 from urllib.parse import quote
+from openai import OpenAI
 
 app = Flask(__name__)
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 PDF_PATH = "Institucional_Caviver.pdf"
 
 WHATSAPP_ATENDENTE = "5585982035619"
 LINK_AGENDAMENTO_ONLINE = "https://visaosolidaria.agende.ai"
+
+# Memória simples da conversa
+conversas = {}
 
 
 def carregar_texto_pdf(caminho_pdf):
@@ -31,61 +34,223 @@ def carregar_texto_pdf(caminho_pdf):
         return ""
 
 
-def paciente_quer_atendente(mensagem):
-    mensagem = mensagem.lower()
-
-    gatilhos = [
-        "recepção", "recepcao", "atendente", "humano", "pessoa",
-        "falar com alguém", "falar com alguem",
-        "quero falar com alguém", "quero falar com alguem",
-        "falar com atendente", "quero atendente",
-        "encaminhe", "transferir", "tirar dúvidas", "tirar duvidas"
-    ]
-
-    return any(t in mensagem for t in gatilhos)
-
-
-def paciente_quer_agendamento(mensagem):
-    mensagem = mensagem.lower()
-
-    gatilhos_fortes = [
-        "quero agendar",
-        "quero marcar",
-        "quero fazer agendamento",
-        "como faço para agendar",
-        "como faco para agendar",
-        "como agendar",
-        "agendar consulta",
-        "marcar consulta",
-        "fazer agendamento",
-        "link de agendamento",
-        "manda o link",
-        "mande o link",
-        "pode agendar",
-        "quero atendimento"
-    ]
-
-    return any(t in mensagem for t in gatilhos_fortes)
-
-
-def paciente_tem_urgencia(mensagem):
-    mensagem = mensagem.lower()
-
-    gatilhos = [
-        "perdi a visão", "perdi a visao", "perda de visão", "perda de visao",
-        "dor forte", "dor intensa", "trauma", "bati o olho",
-        "sangrando", "não estou enxergando", "nao estou enxergando",
-        "urgência", "urgencia", "emergência", "emergencia"
-    ]
-
-    return any(t in mensagem for t in gatilhos)
+texto_pdf = carregar_texto_pdf(PDF_PATH)
 
 
 def gerar_link_whatsapp(numero, mensagem):
     return f"https://wa.me/{numero}?text={quote(mensagem)}"
 
 
-texto_pdf = carregar_texto_pdf(PDF_PATH)
+def normalizar(mensagem):
+    return mensagem.lower().strip()
+
+
+def obter_id_usuario(data):
+    return (
+        data.get("telefone")
+        or data.get("phone")
+        or data.get("numero")
+        or data.get("user_id")
+        or "usuario_teste"
+    )
+
+
+def contem_alguma(mensagem, palavras):
+    mensagem = normalizar(mensagem)
+    return any(p in mensagem for p in palavras)
+
+
+def paciente_saudacao(mensagem):
+    return normalizar(mensagem) in [
+        "oi", "olá", "ola", "bom dia", "boa tarde", "boa noite",
+        "e aí", "eai", "opa"
+    ]
+
+
+def paciente_quer_atendente(mensagem):
+    gatilhos = [
+        "atendente", "humano", "pessoa", "recepção", "recepcao",
+        "falar com alguém", "falar com alguem",
+        "falar com atendente", "quero atendente",
+        "me chama", "me liga", "telefone", "whatsapp",
+        "tirar dúvidas", "tirar duvidas"
+    ]
+    return contem_alguma(mensagem, gatilhos)
+
+
+def paciente_quer_agendamento(mensagem):
+    gatilhos = [
+        "agendar", "marcar", "consulta", "quero consulta",
+        "quero agendar", "quero marcar", "agendamento",
+        "link", "horário", "horario", "atendimento",
+        "oftalmologista", "exame de vista"
+    ]
+    return contem_alguma(mensagem, gatilhos)
+
+
+def paciente_tem_urgencia(mensagem):
+    gatilhos = [
+        "perdi a visão", "perdi a visao", "perda de visão", "perda de visao",
+        "dor forte", "dor intensa", "trauma", "bati o olho",
+        "sangrando", "não estou enxergando", "nao estou enxergando",
+        "urgência", "urgencia", "emergência", "emergencia",
+        "consulta urgente", "urgente"
+    ]
+    return contem_alguma(mensagem, gatilhos)
+
+
+def resposta_inicial():
+    return """Olá! 👋 Seja bem-vindo ao CAVIVER.
+
+Como posso te ajudar hoje?
+
+Você pode me dizer, por exemplo:
+• Quero agendar uma consulta
+• Quero falar com atendente
+• Quero saber sobre exames
+• Quero saber sobre consultas"""
+
+
+def resposta_pedir_nome():
+    return """Claro 😊
+Vou te ajudar com o agendamento.
+
+Qual é o nome do paciente?"""
+
+
+def resposta_agendamento(nome, link_atendente):
+    if nome:
+        saudacao = f"Perfeito, {nome} 😊"
+    else:
+        saudacao = "Perfeito 😊"
+
+    return f"""{saudacao}
+
+Para fazer seu agendamento, clique no link abaixo e escolha o melhor dia e horário:
+
+{LINK_AGENDAMENTO_ONLINE}
+
+Se preferir, também pode falar com uma atendente:
+{link_atendente}"""
+
+
+def resposta_atendente(link_atendente):
+    return f"""Claro 😊
+
+Você pode falar com uma atendente pelo link abaixo:
+
+{link_atendente}"""
+
+
+def resposta_urgencia(link_atendente):
+    return f"""Sinto muito por isso.
+
+Em caso de dor forte, perda súbita de visão, trauma no olho ou piora rápida, procure falar com atendente imediatamente.
+
+{link_atendente}"""
+
+
+def resposta_confirmacao_agendamento(nome):
+    if nome:
+        return f"""Que bom, {nome}! 😊
+
+Agendamento realizado com sucesso.
+
+No dia marcado, compareça com seus documentos pessoais."""
+    
+    return """Que bom! 😊
+
+Agendamento realizado com sucesso.
+
+No dia marcado, compareça com seus documentos pessoais."""
+
+
+def parece_nome(mensagem):
+    msg = mensagem.strip()
+
+    if len(msg) < 2:
+        return False
+
+    bloqueios = [
+        "agendar", "consulta", "atendente", "exame", "valor",
+        "preço", "preco", "horário", "horario", "link",
+        "sim", "não", "nao", "quero"
+    ]
+
+    if contem_alguma(msg, bloqueios):
+        return False
+
+    return True
+
+
+def gerar_resposta_ia(mensagem, nome, link_atendente):
+    nome_texto = nome if nome else "paciente"
+
+    prompt = f"""
+Você é o assistente virtual do Visão Solidária/CAVIVER.
+
+Seu papel não é apenas responder.
+Seu papel é conduzir o paciente até a solução com mensagens curtas, humanas e objetivas.
+
+Contexto:
+O paciente se chama: {nome_texto}
+
+Regras principais:
+Você é o assistente virtual do Visão Solidária/CAVIVER.
+
+Seu papel não é apenas responder.
+Seu papel é conduzir o paciente até a solução com mensagens curtas, humanas e objetivas.
+
+Regras principais:
+- Nunca envie mensagens longas.
+- Nunca dê muitas opções ao mesmo tempo.
+- Sempre termine com uma pergunta simples ou uma próxima ação clara.
+- Use linguagem natural, acolhedora e profissional.
+- Não pare a conversa sem orientar o próximo passo.
+- Nunca dê diagnóstico médico.
+- Se o paciente quiser agendar, peça apenas o nome.
+- Depois do nome, envie diretamente o link de agendamento online e a opção de falar com atendente.
+- Não peça CPF, endereço, data de nascimento ou telefone. Esses dados serão preenchidos no agendamento online.
+- Se o paciente demonstrar dúvida, explique de forma simples e depois conduza.
+- Se o paciente perguntar valor, diga que o valor da consulta é R$150,00 e os valores dos exames podem variar conforme o exame.
+- Se o paciente pedir atendente, envie o link da atendente.
+- Se não souber responder, diga que uma atendente pode ajudar.
+- Se houver urgência médica, oriente falar com a atendente imediatamente.
+
+Formato das respostas:
+- Máximo de 4 linhas.
+- Tom humano.
+- Sem parecer robô.
+- Sempre guiando o paciente.
+
+
+Links importantes:
+Agendamento online: {LINK_AGENDAMENTO_ONLINE}
+Atendente: {link_atendente}
+
+Base de conhecimento:
+{texto_pdf}
+
+Mensagem do paciente:
+{mensagem}
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "Você é o assistente virtual do Visão Solidária/CAVIVER. Seja humano, curto, claro, acolhedor e sempre guie o paciente."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0.5
+    )
+
+    return response.choices[0].message.content.strip()
 
 
 @app.route("/")
@@ -95,124 +260,116 @@ def home():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json()
-    mensagem = data.get("mensagem", "").strip()
-
-    if not mensagem:
-        return jsonify({"resposta": "Digite uma mensagem.", "transferir": False})
-
-    mensagem_whatsapp = f"Olá, gostaria de tirar dúvidas sobre o Visão Solidária.\n\nMensagem: {mensagem}"
-    link_atendente = gerar_link_whatsapp(WHATSAPP_ATENDENTE, mensagem_whatsapp)
-
-    if paciente_tem_urgencia(mensagem):
-        resposta_urgencia = f"""Sinto muito por isso. Em casos de dor forte, perda súbita de visão, trauma no olho ou piora rápida, o ideal é procurar atendimento médico imediatamente.
-
-Se quiser, também posso te direcionar para uma atendente do Visão Solidária:
-{link_atendente}"""
-
-        return jsonify({
-            "resposta": resposta_urgencia,
-            "transferir": True,
-            "link_whatsapp": link_atendente
-        })
-
-    if paciente_quer_agendamento(mensagem):
-        resposta_agendamento = f"""Claro 😊
-
-Você prefere fazer o agendamento online ou falar com uma atendente?
-
-👉 Agendamento online:
-{LINK_AGENDAMENTO_ONLINE}
-
-👉 Falar com atendente:
-{link_atendente}"""
-
-        return jsonify({
-            "resposta": resposta_agendamento,
-            "transferir": False,
-            "link_whatsapp": link_atendente
-        })
-
-    if paciente_quer_atendente(mensagem):
-        return jsonify({
-            "resposta": f"Claro 😊 Você pode falar com uma atendente pelo link abaixo:\n\n{link_atendente}",
-            "transferir": True,
-            "link_whatsapp": link_atendente
-        })
-
     try:
-        prompt = f"""
-Você é o assistente virtual do Visão Solidária.
+        data = request.get_json()
+        mensagem = data.get("mensagem", "").strip()
 
-O Visão Solidária é um programa que oferece atendimentos oftalmológicos com valores mais acessíveis.
+        if not mensagem:
+            return jsonify({
+                "resposta": "Digite uma mensagem para eu te ajudar 😊",
+                "transferir": False
+            })
 
-Seu objetivo:
-- Tirar dúvidas dos pacientes.
-- Explicar o que é o Visão Solidária.
-- Orientar sobre consultas, exames e atendimento oftalmológico.
-- Conduzir o paciente com naturalidade, sem parecer robótico.
-- Sugerir agendamento somente quando fizer sentido.
-- Encaminhar para uma atendente quando necessário.
+        user_id = obter_id_usuario(data)
 
-Tom de voz:
-- Educado.
-- Acolhedor.
-- Simples.
-- Profissional.
-- Humano.
-- Natural.
-- Nunca frio ou robótico.
+        if user_id not in conversas:
+            conversas[user_id] = {
+                "etapa": "inicio",
+                "nome": "",
+                "intencao": ""
+            }
 
-Regras importantes:
-1. Responda de forma curta, clara e natural.
-2. Use as informações da base de conhecimento abaixo.
-3. Não invente valores, horários, endereços ou serviços.
-4. Se não souber responder, diga de forma gentil que uma atendente pode ajudar.
-5. Nunca dê diagnóstico médico.
-6. Se o paciente relatar dor forte, perda súbita de visão, trauma no olho ou urgência, oriente procurar atendimento médico imediatamente.
-7. Não ofereça agendamento em toda resposta.
-8. Se o paciente apenas fizer uma pergunta, responda primeiro a pergunta.
-9. Se o paciente perguntar valor, explique que os valores são acessíveis e podem variar conforme o atendimento. Depois diga que, se quiser, você pode ajudar com o agendamento ou direcionar para uma atendente.
-10. Se o paciente demonstrar interesse claro em marcar, agendar ou receber o link, aí sim ofereça as opções de agendamento.
+        conversa = conversas[user_id]
 
-Regra para perguntas sobre valores:
-Se perguntarem sobre valor, preço ou quanto custa, responda de forma natural, sem forçar agendamento.
-Exemplo de resposta:
-"Os atendimentos do Visão Solidária têm valores mais acessíveis, mas o valor pode variar conforme o tipo de consulta ou exame. Se quiser, posso te ajudar a agendar ou te direcionar para uma atendente 😊"
+        mensagem_atendente = f"""Olá, gostaria de atendimento pelo Visão Solidária.
 
-Regra para agendamento:
-Se o paciente disser claramente que quer agendar, marcar consulta ou pedir o link de agendamento, responda com estas opções:
+Mensagem do paciente:
+{mensagem}"""
 
-Você prefere fazer o agendamento online ou falar com uma atendente?
-
-👉 Agendamento online:
-{LINK_AGENDAMENTO_ONLINE}
-
-👉 Falar com atendente:
-{link_atendente}
-
-Base de conhecimento:
-{texto_pdf}
-
-Pergunta do paciente:
-{mensagem}
-"""
-
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Você é o assistente virtual do Visão Solidária. Seja humano, educado, claro, objetivo e não invente informações."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
+        link_atendente = gerar_link_whatsapp(
+            WHATSAPP_ATENDENTE,
+            mensagem_atendente
         )
 
-        resposta = response["choices"][0]["message"]["content"]
+        msg = normalizar(mensagem)
+
+        # Confirmação de agendamento
+        if msg in ["agendei", "já agendei", "ja agendei", "consegui", "marquei", "finalizei"]:
+            conversa["etapa"] = "finalizado"
+            return jsonify({
+                "resposta": resposta_confirmacao_agendamento(conversa.get("nome")),
+                "transferir": False
+            })
+
+        # Urgência
+        if paciente_tem_urgencia(mensagem):
+            conversa["etapa"] = "urgencia"
+            return jsonify({
+                "resposta": resposta_urgencia(link_atendente),
+                "transferir": True,
+                "link_whatsapp": link_atendente
+            })
+
+        # Saudação inicial
+        if paciente_saudacao(mensagem) and conversa["etapa"] == "inicio":
+            return jsonify({
+                "resposta": resposta_inicial(),
+                "transferir": False
+            })
+
+        # Atendente
+        if paciente_quer_atendente(mensagem):
+            conversa["etapa"] = "atendente"
+            return jsonify({
+                "resposta": resposta_atendente(link_atendente),
+                "transferir": True,
+                "link_whatsapp": link_atendente
+            })
+
+        # Pedido claro de agendamento
+        if paciente_quer_agendamento(mensagem) and conversa["etapa"] in ["inicio", "duvida", "finalizado"]:
+            conversa["etapa"] = "aguardando_nome"
+            conversa["intencao"] = "agendamento"
+            return jsonify({
+                "resposta": resposta_pedir_nome(),
+                "transferir": False
+            })
+
+        # Captura do nome
+        if conversa["etapa"] == "aguardando_nome":
+            if parece_nome(mensagem):
+                conversa["nome"] = mensagem.title()
+                conversa["etapa"] = "agendamento_enviado"
+
+                return jsonify({
+                    "resposta": resposta_agendamento(conversa["nome"], link_atendente),
+                    "transferir": False,
+                    "link_agendamento": LINK_AGENDAMENTO_ONLINE,
+                    "link_whatsapp": link_atendente
+                })
+
+            return jsonify({
+                "resposta": "Me informe apenas o nome do paciente, por favor 😊",
+                "transferir": False
+            })
+
+        # Se a pessoa pedir o link depois
+        if msg in ["online", "agendamento online", "quero online", "pelo site", "site"]:
+            conversa["etapa"] = "agendamento_enviado"
+            return jsonify({
+                "resposta": resposta_agendamento(conversa.get("nome"), link_atendente),
+                "transferir": False,
+                "link_agendamento": LINK_AGENDAMENTO_ONLINE
+            })
+
+        # Resposta com IA para dúvidas gerais
+        resposta = gerar_resposta_ia(
+            mensagem=mensagem,
+            nome=conversa.get("nome"),
+            link_atendente=link_atendente
+        )
+
+        conversa["etapa"] = "duvida"
 
         return jsonify({
             "resposta": resposta,
@@ -220,8 +377,10 @@ Pergunta do paciente:
         })
 
     except Exception as e:
+        print("ERRO NO CHAT:", e)
+
         return jsonify({
-            "resposta": f"Erro: {str(e)}",
+            "resposta": "Tive uma instabilidade aqui, mas posso te direcionar para uma atendente 😊",
             "transferir": False
         })
 
