@@ -47,11 +47,14 @@ def normalizar(mensagem):
 
 def obter_id_usuario(data):
     return (
-        data.get("telefone")
-        or data.get("phone")
+        data.get("phone")
+        or data.get("telefone")
         or data.get("numero")
+        or data.get("from")
+        or data.get("sender")
+        or data.get("senderPhone")
         or data.get("user_id")
-        or "usuario_teste"
+        or request.remote_addr
     )
 
 
@@ -78,12 +81,32 @@ def paciente_quer_atendente(mensagem):
     return contem_alguma(mensagem, gatilhos)
 
 
+def paciente_pergunta_valor(mensagem):
+    gatilhos = [
+        "valor", "preço", "preco", "quanto custa",
+        "qual o valor", "quanto é", "quanto e",
+        "consulta custa", "valor da consulta"
+    ]
+    return contem_alguma(mensagem, gatilhos)
+
+
 def paciente_quer_agendamento(mensagem):
     gatilhos = [
-        "agendar", "marcar", "consulta", "quero consulta",
-        "quero agendar", "quero marcar", "agendamento",
-        "link", "horário", "horario", "atendimento",
-        "oftalmologista", "exame de vista"
+        "quero agendar",
+        "quero marcar",
+        "quero fazer agendamento",
+        "como faço para agendar",
+        "como faco para agendar",
+        "como agendar",
+        "agendar consulta",
+        "marcar consulta",
+        "fazer agendamento",
+        "link de agendamento",
+        "manda o link",
+        "mande o link",
+        "quero atendimento",
+        "quero marcar uma consulta",
+        "quero agendar uma consulta"
     ]
     return contem_alguma(mensagem, gatilhos)
 
@@ -324,6 +347,17 @@ Mensagem do paciente:
                 "resposta": resposta_atendente(link_atendente),
                 "transferir": True,
                 "link_whatsapp": link_atendente
+            })
+        
+
+        if paciente_pergunta_valor(mensagem):
+            return jsonify({
+                "resposta": """Os atendimentos do Visão Solidária têm valores mais acessíveis 😊
+
+        O valor pode variar conforme o tipo de consulta ou exame.
+
+        Você deseja agendar online ou falar com uma atendente?""",
+                "transferir": False
             })
 
         # Pedido claro de agendamento
